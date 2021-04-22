@@ -1,0 +1,257 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<div>
+	<h1> EVITAR A XAVI!</h1>
+
+	</div>
+<link href="Styles/Estilos.css" rel="Stylesheet" type="text/css" />
+<script src="Scripts/jQueryv172.js" type="text/javascript"></script>
+<script src="Scripts/buscaminas.js" type="text/javascript"></script>
+    <title>Evitar a Xavi</title>
+</head>
+
+<script type="text/javascript">    
+    /* hay todavia cierto problema con las diagonales
+    */  
+    //variables para el manejo del nivel       
+    
+    var nivel = 1; //el nivel actual
+    var espacioNivel = new Number(9); //la cantidad de espacios segun el nivel (cuadros en el tablero) , para el nivel 1  9 espacios, para el 2  14 espacios, para el nivel 3  19 espacios
+    var minasNivel = 10; //la cantidad de minas segun el nivel
+
+    var minas = new Array(espacioNivel);
+    var cantMinas = 0;
+    var inicio = false; //permite saber si el usuario inicio el juego
+    var timer;
+    var segundos = new Number(0);
+    var controlPress = false; //saber si tiene presionada la tecla que permite poner la bandera
+    var cantBanderas = 0; //permite saber la cantidad de banderas que ha puesto el usuario
+    var puntaje = 0;
+    var perder = false;
+    var ganar = false;
+
+    //animacion minas
+    var minasCubiertas; //array que guardara las posiciones de las minas, en caso que el jugador pierda  
+    var posMinasCubiertas = 0; //lleva la posicion del vector para poder descubrir las minas paso a paso
+    var cantMinasCubiertas = 0; //la cantidad de minas cubiertas en un momento dado, sirve para saber cuando termina la animacion
+    var timerMinas;
+    var explosion; //sonideo de la explosion
+    
+    //variables facebook
+    var idusuario;
+    var nombreJuego = 'buscaminas';
+    var idJuego = 1;
+    var host = 'http://localhost:90/conexion/conexionmulti.php';
+
+    //animacion loading
+    var vecesLoading = 0; //se utiliza para ejecutar cierta cantidad de veces la animacion del fondo del loading
+    var vecesLoading2 = 0; //para el loading2
+    var timerLoading;
+    var timerLoading2;
+
+    //las numeros en la matriz son asi:
+    //mina: 0                       mina con bandera: 10
+    //vacio: -1  vacio descubierto: -10 vacio bandera: -100
+    //numero: 1 numero descubierto: 100 numero bandera: 1000
+    //numero: 2 numero descubierto: 200 numero bandera: 2000
+
+    $(document).ready(function () {
+        principal();      
+                
+    });
+    
+    //obtiene la informacion de un atributo que esta varias veces, recibe la cadena el atributo y el array donde se almacenara
+    function obtenerAtributos(cadenaJson,atributoJson,arrayJson){    
+        for(var i=0;i<5;i++){        
+            arrayJson[i] = obtenerAtributo(cadenaJson,atributoJson);    
+
+            //quitar el atributo para no repetir el dato
+            var indexJson = new Number(cadenaJson.indexOf(atributoJson));
+            cadenaJson = cadenaJson.substring(indexJson + atributoJson.length);
+        }
+    }
+    
+    //obtiene el atributo de un estructura json, recibe la cadena y el atributo que se va a consultar
+    function obtenerAtributo(cadena, atributo) {
+        var index = new Number(cadena.indexOf(atributo));
+        var sub = cadena.substring((index + 4 + atributo.length));
+
+        var index2 = new Number(sub.indexOf(','));
+        var resultado = sub.substring(0, (index2 - 1)); //el dato a consultar lo obtenemos con la segunda cadena, la cual en su posicion 0 tiene el inicio del dato
+        return resultado;
+    }   
+    
+    function ganaste() {
+        if (nivel == 1){
+            if(segundos > 300){
+                puntaje = 100;
+            }
+            else{
+                puntaje = (segundos * -1) + 400;
+            }
+        }
+        else if(nivel == 2){
+            if(segundos > 600){
+                puntaje = 200;
+            }
+            else{
+                puntaje = (segundos * -1) + 800;
+            }
+        }
+        else if(nivel == 3){
+            if(segundos > 1000){
+                puntaje = 300;
+            }
+            else{
+                puntaje = (segundos * -1) + 1300;
+            }
+        }
+        
+        if(idusuario != undefined){
+            $('#load').load(host + '?metodo=ingresarPuntuacion&idfacebook=' + idusuario +  '&idjuego=' + idJuego + '&tiempo=' + segundos + '&nivel=' + nivel + '&puntaje=' + puntaje, function(resul){
+                
+                
+            });
+        }
+
+        //hay que quitar todo el texto primero antes de agregar alguno nuevo
+        $('#modaltitulo').empty().append('GANASTE');
+        $('#modaltiempo').empty().append('Tu tiempo fue de: ' + segundos + ' segundos');
+        $('#modalpuntaje').empty().append('Tu puntaje fue de: ' + puntaje);
+        $('#modalnuevojuego').empty().append("<a onclick=" + "reiniciarJuego(" + nivel + ")" + ">Nuevo Juego</a>");
+
+        modal();        
+    }  
+      
+    function reiniciarJuego(nivelUsuario) { //se envia el nivel que el usuario desea jugar
+        //
+        //reiniciar todas las variables del juego
+        cantMinas = 0;
+        inicio = false;
+        segundos = 0;
+        controlPress = false;
+        cantBanderas = 0;
+        puntaje = 0;
+        perder = false;
+        ganar = false;
+        posMinasCubiertas = 0;
+        cantMinasCubiertas = 0;
+        clearInterval(timer);
+
+        //asignar variables de nivel
+        nivel = nivelUsuario;
+
+        if (nivel == 1) {
+            espacioNivel = 9;
+            minasNivel = 10;
+        }
+        else if (nivel == 2) {
+            espacioNivel = 14;
+            minasNivel = 30;
+        }
+        else {
+            espacioNivel = 19;
+            minasNivel = 70;
+        }
+
+        $("#canvas").empty();
+        
+        principal();       
+
+        modalCerrar();
+        $('#lblcontador').text('0');
+        $('#canvas div').attr('class', 'bloque'); //asignar estilo a todos los bloques             
+
+    }
+</script>
+
+<body>
+    <form id="form1" runat="server">
+        <div id="precontenedor" class="precontenedor">
+            <div id="contenedor" class="contenedor">
+                <div class="superiorjuego">
+                    <div class="superiorjuego_interno">                    
+                        <p onclick="reiniciarJuego(1)">Facil</p>
+                    </div>
+                    <div class="superiorjuego_interno">                    
+                        <p onclick="reiniciarJuego(2)">Medio</p>
+                    </div>
+                    <div class="superiorjuego_interno">
+                        <p onclick="reiniciarJuego(3)">Dificil</p>
+                    </div>                
+                </div>
+                
+                <div class="fondo">
+                    <div id="canvas"></div>              
+                    <div id="bordeinferior" class="bordeinferior">
+                        <div id="panelIzquierdo" class="panelizquierdo">
+                        <div id="reloj" class="reloj"></div>                   
+                        <label id="lblcontador" class="contador"></label>
+                        </div>
+                        <div id="panelDerecho" class="panelderecho">
+                            <label id="lblcontadorMinas" class="contador"></label>
+                            <div id="logomina" class="logomina"></div>
+                        </div>
+                    </div>
+                    <div id="textoInferior" class="textoinferior">
+                        <div class="texto">Tecla Z + click para poner</div>
+                        <div class="imagenbandera"></div>                
+                    </div>
+
+                    <div class="nuevojuego">
+                        <p onclick="reiniciarJuego(nivel)">XAVI QUIERE REVANCHA </p>
+                    </div>
+                </div>               
+            </div>            
+                        
+            <!--<div class="recomendados">
+                <div class="recomendados_titulo">Juegos Recomendados</div>
+                <div class="recomendados_contenedor">
+                    <div class="recomendados_imagen">
+                        <img src="Styles/Images/imagenpuzzle.png" alt="imagen" />
+                    </div>
+                    <div class="recomendados_descripcion">
+                        Organiza los numeros y gana puntos
+                    </div>
+                    <div class="recomendados_imagen"></div>
+                    <div class="recomendados_descripcion"></div>
+                    <div class="recomendados_imagen"></div>
+                    <div class="recomendados_descripcion"></div>
+                </div>
+            </div>-->
+            
+        </div>      
+        
+        <div class="modal">
+            <div class="bordesuperior"></div>
+            <div class="bordeizquierdo"></div>
+            <div class="superior" id="superior"></div>
+            <input type="button" onclick="modalCerrar()" class="cerrarmodal" />            
+            <div class="bordederecho"></div>
+            <div class="contenido">                
+                <div id="modaltitulo" class="titulo"></div>
+                <div id="modaltiempo" class="texto"></div>
+                <div id="modalpuntaje" class="texto"></div>
+                <div id="modalnuevojuego" class="texto"></div>
+            </div>
+            <div class="bordeinferiormodal"></div>            
+        </div>
+        <div class="modaltransparencia"></div>
+
+        
+        <div>
+            <audio id="explosion" preload="load">
+               <source src="Sounds/explosionlarga.mp3"></source> 
+               <source src="Sounds/explosionlarga.wav"></source>
+            </audio>
+        </div>        
+        <div id="load" class="load"></div>        
+        <div id="texto"></div>
+    </form>
+   
+
+
+</body>
+</html>
