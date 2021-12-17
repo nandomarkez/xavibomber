@@ -13,7 +13,7 @@ div.precontenedor2
 }
 body 
 {
-	background-image: url(Images/fond.jpg);
+	background-image: url(Images/fond.jpg) no-repeat;
 }
 
 h1
